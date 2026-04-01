@@ -1,9 +1,9 @@
 import 'package:bonless61/auth/signup.dart';
-import 'package:bonless61/screens/homeScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
+import 'package:bonless61/screens/navigator.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -118,7 +118,7 @@ class _LoginState extends State<Login> {
             child: buildButton(
               text: "SIGN IN",
               onTap: () {
-                Get.to(Homescreen());
+                Get.to(() => const AppNavigator());
               },
             ),
           ),
