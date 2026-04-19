@@ -1,9 +1,14 @@
+import 'dart:convert';
+
+import 'package:bonless61/core/config/app_config.dart';
+import 'package:http/http.dart' as http;
 import 'package:bonless61/auth/signup.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:bonless61/screens/navigator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -14,6 +19,100 @@ class Login extends StatefulWidget {
 
 class _LoginState extends State<Login> {
   bool isPasswordHidden = true;
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  bool isLoading = false;
+
+  static const String _baseUrl = AppConfig.baseUrl;
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    final phone = phoneController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (phone.isEmpty || password.isEmpty) {
+      Get.snackbar(
+        'Missing information',
+        'Please enter your phone number and password.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/login'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'phone': phone,
+          'password': password,
+        }),
+      );
+
+      final Map<String, dynamic> data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final prefs = await SharedPreferences.getInstance();
+        final token = data['token']?.toString();
+
+        if (token != null && token.isNotEmpty) {
+          await prefs.setString('token', token);
+        }
+
+        Get.snackbar(
+          'Success',
+          data['message']?.toString() ?? 'Logged in successfully.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+
+        Get.offAll(() => const AppNavigator());
+        return;
+      }
+
+      String errorMessage = 'Login failed. Please try again.';
+
+      if (data['errors'] is Map && data['errors']['phone'] is List && (data['errors']['phone'] as List).isNotEmpty) {
+        errorMessage = data['errors']['phone'].first.toString();
+      } else if (data['message'] != null) {
+        errorMessage = data['message'].toString();
+      }
+
+      Get.snackbar(
+        'Login failed',
+        errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      Get.snackbar(
+        'Connection error',
+        'Could not connect to the server. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +191,7 @@ class _LoginState extends State<Login> {
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: buildInputField(
+              controller: phoneController, //there is an error here 
               label: 'PHONE NUMBER',
               hint: 'PHONE NUMBER',
               keyboardType: TextInputType.phone,
@@ -101,6 +201,7 @@ class _LoginState extends State<Login> {
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: buildInputField(
+              controller: passwordController,
               label: 'PASSWORD',
               hint: '••••••••',
               prefixIcon: Icons.lock,
@@ -116,12 +217,15 @@ class _LoginState extends State<Login> {
           Padding(
             padding: const EdgeInsets.only(bottom: 18),
             child: buildButton(
-              text: "SIGN IN",
-              onTap: () {
-                Get.to(() => const AppNavigator());
-              },
+              text: isLoading ? "SIGNING IN..." : "SIGN IN",
+              onTap: isLoading ? null : _login,
             ),
           ),
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: CircularProgressIndicator(),
+            ),
         ],
       ),
     );

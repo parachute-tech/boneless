@@ -1,41 +1,147 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/top_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:bonless61/auth/login.dart';
+import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bonless61/core/config/app_config.dart';
 
-class ProfileScreen extends StatelessWidget {
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late Future<Map<String, dynamic>> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _fetchProfile();
+  }
+
+  Future<Map<String, dynamic>> _fetchProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('No auth token found.');
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/profile'),
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    final Map<String, dynamic> json = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return Map<String, dynamic>.from(json['data'] as Map);
+    }
+
+    if (response.statusCode == 401) {
+      await prefs.remove('token');
+      throw Exception('Session expired. Please log in again.');
+    }
+
+    throw Exception(json['message']?.toString() ?? 'Failed to load profile.');
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _profileFuture = _fetchProfile();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      appBar: TopBar(),
+    return Scaffold(
+      appBar: const TopBar(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              children: [
-                ProfileCard(
-                  name: 'ROCCO VALENTINO',
-                  email: 'rocco@boneless61.com',
-                  phone: '+1 (555) 000-0061',
-                  tier: 'SILVER MEMBER',
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _profileFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.white70, size: 40),
+                      const SizedBox(height: 12),
+                      Text(
+                        snapshot.error.toString().replaceFirst('Exception: ', ''),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _retry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
-                SizedBox(height: 20),
-                PointsCard(
-                  points: 25,
-                  progress: 0.62,
-                  remainingText: '15 PTS UNTIL FREE LOADED FRIES',
+              );
+            }
+
+            final profile = snapshot.data!;
+            final fullName = (profile['full_name']?.toString().trim().isNotEmpty ?? false)
+                ? profile['full_name'].toString()
+                : 'Guest User';
+            final email = (profile['email']?.toString().trim().isNotEmpty ?? false)
+                ? profile['email'].toString()
+                : 'No email available';
+            final phone = (profile['phone']?.toString().trim().isNotEmpty ?? false)
+                ? profile['phone'].toString()
+                : 'No phone available';
+            final loyaltyTier = profile['loyalty_tier'];
+            final tierName = loyaltyTier is Map && loyaltyTier['name'] != null
+                ? loyaltyTier['name'].toString()
+                : 'MEMBER';
+
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    ProfileCard(
+                      name: fullName.toUpperCase(),
+                      email: email,
+                      phone: phone,
+                      tier: tierName.toUpperCase(),
+                    ),
+                    const SizedBox(height: 20),
+                    const PointsCard(
+                      points: 25,
+                      progress: 0.62,
+                      remainingText: '15 PTS UNTIL FREE LOADED FRIES',
+                    ),
+                    const SizedBox(height: 20),
+                    const ProfileActionsGrid(),
+                    const SizedBox(height: 30),
+                    const LogoutButton(),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                const ProfileActionsGrid(),
-                const SizedBox(height: 30),
-                LogoutButton(),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
-      )
+      ),
     );
   }
 }
@@ -407,11 +513,20 @@ class ProfileActionCard extends StatelessWidget {
 class LogoutButton extends StatelessWidget {
   const LogoutButton({super.key});
 
+  Future<void> _logout(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('token');
+
+    if (!context.mounted) return;
+
+    Get.offAll(() => const Login());
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: (){
-        Navigator.pop(context);
+      onTap: () async {
+        await _logout(context);
       },
       child: Container(
         width: double.infinity,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 
 Widget buildInputField({
+    TextEditingController? controller,
     required String label,
     required String hint,
     TextInputType keyboardType = TextInputType.text,
@@ -49,6 +50,7 @@ Widget buildInputField({
           ),
           child: Center(
             child: TextField(
+              controller: controller,
               keyboardType: keyboardType,
               obscureText: isPassword ? obscureText : false,
               style: const TextStyle(color: Colors.white),
