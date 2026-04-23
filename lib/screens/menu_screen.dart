@@ -1,149 +1,326 @@
+import 'dart:convert';
+
+import 'package:bonless61/core/config/app_config.dart';
+import 'package:get/get_utils/src/extensions/internacionalization.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:bonless61/screens/order_screen.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:get/route_manager.dart';
 
-class MenuScreen extends StatelessWidget {
+class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
+
+  @override
+  State<MenuScreen> createState() => _MenuScreenState();
+}
+
+class _MenuScreenState extends State<MenuScreen> {
+  late Future<List<Map<String, dynamic>>> _menuFuture;
+  int _selectedCategoryIndex = 0;
+  final TextEditingController searchController = TextEditingController();
+  String searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _menuFuture = _fetchMenu();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchMenu() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('No auth token found. Please log in again.');
+    }
+
+    final locale = Get.locale?.languageCode ?? 'en';
+    final language = locale == 'ar' ? 'ar' : 'en';
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/menu'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+        'X-Language': language,
+      },
+    );
+
+    final Map<String, dynamic> json = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      final data = json['data'];
+      if (data is List) {
+        return data.map((category) => Map<String, dynamic>.from(category as Map)).toList();
+      }
+      return [];
+    }
+
+    if (response.statusCode == 401) {
+      await prefs.remove('token');
+      throw Exception('Session expired. Please log in again.');
+    }
+
+    throw Exception(json['message']?.toString() ?? 'Failed to load menu.');
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _menuFuture = _fetchMenu();
+    });
+  }
+
+  String _formatPrice(dynamic value) {
+    if (value == null) return '0 SYP';
+    return '${value.toString()} SYP';
+  }
+
+  String _formatCalories(dynamic value) {
+    if (value == null) return 'N/A';
+    return '${value.toString()} CAL';
+  }
+
+  List<Map<String, dynamic>> _extractItems(Map<String, dynamic> category) {
+    final items = category['items'];
+    if (items is List) {
+      return items.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    }
+    return [];
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: TopBar(),
+      appBar: const TopBar(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(20),
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _menuFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.white70, size: 40),
+                      const SizedBox(height: 12),
+                      Text(
+                        snapshot.error.toString().replaceFirst('Exception: ', ''),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _retry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
+              );
+            }
+
+            final categories = snapshot.data ?? [];
+
+            if (categories.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No menu items available right now.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              );
+            }
+
+            final safeIndex = _selectedCategoryIndex >= categories.length ? 0 : _selectedCategoryIndex;
+            final selectedCategory = categories[safeIndex];
+            final allItems = _extractItems(selectedCategory);
+            final normalizedQuery = searchQuery.trim().toLowerCase();
+            final items = allItems.where((item) {
+              if (normalizedQuery.isEmpty) return true;
+              final name = item['name']?.toString().toLowerCase() ?? '';
+              final description = item['description']?.toString().toLowerCase() ?? '';
+              return name.contains(normalizedQuery) || description.contains(normalizedQuery);
+            }).toList();
+
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-                      child: Column(
-                        children: [
-                          /*Align(
-                            alignment: Alignment.centerLeft,
-                            child: Image.asset(
-                              'assets/logo.png',
-                              width: 84,
-                            ),
-                          ),*/
-                          const SizedBox(height: 20),
-                          RichText(
-                            textAlign: TextAlign.center,
-                            text: const TextSpan(
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                              children: [
-                                TextSpan(text: 'BONELESS '),
-                                TextSpan(
-                                  text: '61',
-                                  style: TextStyle(color: AppColors.primaryRed),
-                                ),
-                                TextSpan(text: ' MENU'),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'HEAVY-DUTY FLAVOR FOR THE URBAN\nAPPETITE.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white38,
-                              fontSize: 14,
-                              letterSpacing: 1,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                      decoration: const BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E1E),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Column(
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 84,
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryRed,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              const SizedBox(width: 18),
-                              const Icon(
-                                Icons.search,
-                                color: Colors.white54,
-                                size: 28,
-                              ),
-                              const SizedBox(width: 16),
-                              const Expanded(
-                                child: Text(
-                                  'CRAVING SOMETHING\nBOLD?',
-                                  style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 16,
-                                    height: 1.3,
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 20),
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: const TextSpan(
+                                    style: TextStyle(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                    children: [
+                                      TextSpan(text: 'BONELESS '),
+                                      TextSpan(
+                                        text: '61',
+                                        style: TextStyle(color: AppColors.primaryRed),
+                                      ),
+                                      TextSpan(text: ' MENU'),
+                                    ],
                                   ),
                                 ),
-                              ),
-                              Container(
-                                width: 66,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.white12,
-                                  borderRadius: BorderRadius.circular(8),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'HEAVY-DUTY FLAVOR FOR THE URBAN\nAPPETITE.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 14,
+                                    letterSpacing: 1,
+                                    height: 1.4,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.tune,
-                                  color: Colors.white70,
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            height: 60,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              children: const [
-                                MenuCategoryChip(
-                                  label: 'BURGERS',
-                                  isSelected: true,
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                            decoration: const BoxDecoration(
+                              borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 84,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryRed,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 18),
+                                    const Icon(
+                                      Icons.restaurant_menu,
+                                      color: Colors.white54,
+                                      size: 28,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        selectedCategory['name']?.toString().toUpperCase() ?? 'MENU',
+                                        style: const TextStyle(
+                                          color: Colors.white38,
+                                          fontSize: 16,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 66,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white12,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${items.length}',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(width: 10),
-                                MenuCategoryChip(
-                                  label: 'BONELESS',
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  height: 60,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: categories.length,
+                                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                    itemBuilder: (context, index) {
+                                      final category = categories[index];
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedCategoryIndex = index;
+                                          });
+                                        },
+                                        child: MenuCategoryChip(
+                                          label: category['name']?.toString().toUpperCase() ?? 'CATEGORY',
+                                          isSelected: index == safeIndex,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                                SizedBox(width: 10),
-                                MenuCategoryChip(
-                                  label: 'SIDES',
-                                ),
-                                SizedBox(width: 10),
-                                MenuCategoryChip(
-                                  label: 'DRINKS',
-                                ),
-                                SizedBox(width: 10),
-                                MenuCategoryChip(
-                                  label: 'OFFERS',
+                                const SizedBox(height: 16),
+                                Container(
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(28),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
+                                  child: TextField(
+                                    controller: searchController,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        searchQuery = value;
+                                      });
+                                    },
+                                    style: const TextStyle(color: Colors.white),
+                                    decoration: InputDecoration(
+                                      hintText: 'Search menu',
+                                      hintStyle: const TextStyle(color: Colors.white38),
+                                      prefixIcon: const Icon(Icons.search, color: Colors.white38),
+                                      suffixIcon: searchQuery.isNotEmpty
+                                          ? IconButton(
+                                              onPressed: () {
+                                                searchController.clear();
+                                                setState(() {
+                                                  searchQuery = '';
+                                                });
+                                              },
+                                              icon: const Icon(Icons.close, color: Colors.white54),
+                                            )
+                                          : null,
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 16,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -151,275 +328,49 @@ class MenuScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-               Column(
-                children: [
-                  FeaturedMenuCard(
-                    image: 'assets/deal.png',
-                    title: 'BONELESS WRAP',
-                    subtitle: 'Tortilla wrap packed with\nloaded boneless flavor.',
-                    price: '440 SYP',
-                    calories: '1240 CAL',
-                    onTap: () {
-                      Get.to(() => OrderScreen());
-                    },
-                  ),
-                  SizedBox(height: 16),
-                  FeaturedMenuCard(
-                    image: 'assets/deal.png',
-                    title: 'CRISPY BURGER',
-                    subtitle: 'Stacked crispy chicken with\nsauce and crunchy slaw.',
-                    price: '520 SYP',
-                    calories: '980 CAL',
-                    onTap: () {
-                      Get.to(() => OrderScreen());
-                    },
-                  ),
-                ],
-              ),
-            ]
-              ),
-            
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class MenuItemCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String price;
-  final String image;
-
-  const MenuItemCard({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.price,
-    required this.image,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: GestureDetector(
-        onTap: (){
-          Get.to(()=> OrderScreen());
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  image,
-                  width: 90,
-                  height: 90,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      price,
-                      style: const TextStyle(
-                        color: AppColors.primaryRed,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class MenuCategoryChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-
-  const MenuCategoryChip({
-    super.key,
-    required this.label,
-    this.isSelected = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-      decoration: BoxDecoration(
-        color: isSelected ? AppColors.primaryRed : const Color(0xFF2A2A2A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 15,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class FeaturedMenuCard extends StatelessWidget {
-  final String image;
-  final String title;
-  final String subtitle;
-  final String price;
-  final String calories;
-  final VoidCallback? onTap;
-
-  const FeaturedMenuCard({
-    super.key,
-    required this.image,
-    required this.title,
-    required this.subtitle,
-    required this.price,
-    required this.calories,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                    child: Image.asset(
-                      image,
-                      height: 240,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned(
-                    top: 14,
-                    right: 14,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryRed,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        price,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                    const SizedBox(height: 24),
+                    if (items.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Text(
+                          searchQuery.isNotEmpty
+                              ? 'No menu items match your search.'
+                              : 'No items in this category.',
+                          style: const TextStyle(color: Colors.white70),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                      )
+                    else
+                      Column(
+                        children: [
+                          FeaturedMenuCard(
+                            image: items.first['image_url']?.toString() ?? '',
+                            title: items.first['name']?.toString() ?? 'ITEM',
+                            subtitle: items.first['description']?.toString() ?? '',
+                            price: _formatPrice(items.first['price_syp']),
+                            calories: _formatCalories(items.first['calories']),
+                            onTap: () {
+                              Get.to(() => OrderScreen(item: items.first));                            },
+                          ),
+                          if (items.length > 1) const SizedBox(height: 16),
+                          ...items.skip(1).map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: MenuItemCard(
+                                image: item['image_url']?.toString() ?? '',
+                                title: item['name']?.toString() ?? 'ITEM',
+                                subtitle: item['description']?.toString() ?? '',
+                                price: _formatPrice(item['price_syp']),
+                                item: item,
+                              ),
                             ),
                           ),
-                        ),
-                        Text(
-                          calories,
-                          style: const TextStyle(
-                            color: Colors.white38,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 14,
-                        height: 1.4,
+                        ],
                       ),
-                    ),
                   ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

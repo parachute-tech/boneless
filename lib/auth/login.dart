@@ -9,6 +9,7 @@ import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:bonless61/screens/navigator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:country_picker/country_picker.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -22,6 +23,7 @@ class _LoginState extends State<Login> {
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
+  Country selectedCountry = Country.parse('SY');
 
   static const String _baseUrl = AppConfig.baseUrl;
 
@@ -33,7 +35,11 @@ class _LoginState extends State<Login> {
   }
 
   Future<void> _login() async {
-    final phone = phoneController.text.trim();
+    String rawPhone = phoneController.text.trim();
+    while (rawPhone.startsWith('0')) {
+      rawPhone = rawPhone.substring(1);
+    }
+    final phone = '+${selectedCountry.phoneCode}$rawPhone';
     final password = passwordController.text.trim();
 
     if (phone.isEmpty || password.isEmpty) {
@@ -145,7 +151,7 @@ class _LoginState extends State<Login> {
                       color: Colors.white70,
                     ),
                     children: [
-                      TextSpan(text: 'NEW UNIT? '),
+                      const TextSpan(text: 'NEW UNIT? '),
                       TextSpan(
                         text: 'JOIN THE FLEET',
                         style: TextStyle(
@@ -190,12 +196,121 @@ class _LoginState extends State<Login> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: buildInputField(
-              controller: phoneController, //there is an error here 
-              label: 'PHONE NUMBER',
-              hint: 'PHONE NUMBER',
-              keyboardType: TextInputType.phone,
-              prefixIcon: Icons.phone_iphone_outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      color: AppColors.primaryRed,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'PHONE NUMBER',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        showCountryPicker(
+                          context: context,
+                          showPhoneCode: true,
+                          favorite: const ['SY'],
+                          countryListTheme: CountryListThemeData(
+                            backgroundColor: Colors.black,
+                            textStyle: const TextStyle(color: Colors.white),
+                            bottomSheetHeight: MediaQuery.of(context).size.height * 0.85,
+                            inputDecoration: InputDecoration(
+                              hintText: 'Search country',
+                              hintStyle: const TextStyle(color: Colors.white54),
+                              prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                              filled: true,
+                              fillColor: const Color(0xFF1E1E1E),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          onSelect: (Country country) {
+                            setState(() {
+                              selectedCountry = country;
+                            });
+                          },
+                        );
+                      },
+                      child: Container(
+                        height: 56,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              selectedCountry.flagEmoji,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '+${selectedCountry.phoneCode}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: TextField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: 'PHONE NUMBER',
+                            hintStyle: TextStyle(color: Colors.white38),
+                            prefixIcon: Icon(
+                              Icons.phone_iphone_outlined,
+                              color: Colors.white38,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           Padding(
