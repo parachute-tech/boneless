@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
+      title: 'boneless 61',
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: AppColors.background,
       ),

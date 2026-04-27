@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:bonless61/screens/addresses_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/top_bar.dart';
@@ -18,11 +19,22 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Map<String, dynamic>> _profileFuture;
+  final fullNameController = TextEditingController();
+  final emailController = TextEditingController();
+  String selectedLanguage = 'en';
+  bool isSavingProfile = false;
 
   @override
   void initState() {
     super.initState();
     _profileFuture = _fetchProfile();
+  }
+
+  @override
+  void dispose() {
+    fullNameController.dispose();
+    emailController.dispose();
+    super.dispose();
   }
 
   Future<Map<String, dynamic>> _fetchProfile() async {
@@ -60,6 +72,239 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _profileFuture = _fetchProfile();
     });
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white70),
+      filled: true,
+      fillColor: const Color(0xFF1E1E1E),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.white24),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primaryRed),
+      ),
+    );
+  }
+
+  Future<void> _saveProfile() async {
+    if (fullNameController.text.trim().isEmpty) {
+      Get.snackbar(
+        'Missing field',
+        'Full name is required.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    setState(() => isSavingProfile = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    try {
+      final response = await http.patch(
+        Uri.parse('${AppConfig.baseUrl}/profile'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'full_name': fullNameController.text.trim(),
+          'email': emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+          'language': selectedLanguage,
+        }),
+      );
+
+      final body = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        Get.back();
+        setState(() {
+          _profileFuture = _fetchProfile();
+        });
+        Get.snackbar(
+          'Profile updated',
+          'Your profile was updated successfully.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primaryRed,
+          colorText: Colors.white,
+        );
+      } else {
+        Get.snackbar(
+          'Error',
+          body['message']?.toString() ?? 'Failed to update profile.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (_) {
+      Get.snackbar(
+        'Error',
+        'Something went wrong. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+
+    if (mounted) {
+      setState(() => isSavingProfile = false);
+    }
+  }
+
+  void _showEditProfileDialog(Map<String, dynamic> profile) {
+    fullNameController.text = profile['full_name']?.toString() ?? '';
+    emailController.text = profile['email']?.toString() ?? '';
+    selectedLanguage = profile['language']?.toString() == 'ar' ? 'ar' : 'en';
+
+    Get.dialog(
+      StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Edit Profile',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Get.back(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: fullNameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration('Full name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration('Email'),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock, color: Colors.white54, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Phone: ${profile['phone'] ?? 'N/A'}',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock, color: Colors.white54, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Birth date: ${profile['birth_date'] ?? 'N/A'}',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 12,),
+                  DropdownButtonFormField<String>(
+                    value: selectedLanguage,
+                    dropdownColor: const Color(0xFF1E1E1E),
+                    decoration: _inputDecoration('Language'),
+                    style: const TextStyle(color: Colors.white),
+                    items: const [
+                      DropdownMenuItem(value: 'en', child: Text('English')),
+                      DropdownMenuItem(value: 'ar', child: Text('Arabic')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => selectedLanguage = value);
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryRed,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: isSavingProfile ? null : _saveProfile,
+                      child: isSavingProfile
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Save Profile',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -124,6 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       email: email,
                       phone: phone,
                       tier: tierName.toUpperCase(),
+                      onEdit: () => _showEditProfileDialog(profile),
                     ),
                     const SizedBox(height: 20),
                     const PointsCard(
@@ -151,6 +397,7 @@ class ProfileCard extends StatelessWidget {
   final String email;
   final String phone;
   final String tier;
+  final VoidCallback onEdit;
 
   const ProfileCard({
     super.key,
@@ -158,6 +405,7 @@ class ProfileCard extends StatelessWidget {
     required this.email,
     required this.phone,
     required this.tier,
+    required this.onEdit,
   });
 
   @override
@@ -223,19 +471,22 @@ class ProfileCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2A2A2A),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'EDIT\nPROFILE',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                        GestureDetector(
+                          onTap: onEdit,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A2A2A),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'EDIT\nPROFILE',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -429,9 +680,12 @@ class ProfileActionsGrid extends StatelessWidget {
             ),
             SizedBox(
               width: cardWidth,
-              child: const ProfileActionCard(
-                icon: Icons.location_on_outlined,
-                title: 'SAVED\nADDRESSES',
+              child: GestureDetector(
+                onTap: () => Get.to(AddressesScreen()),
+                child: const ProfileActionCard(
+                  icon: Icons.location_on_outlined,
+                  title: 'SAVED\nADDRESSES',
+                ),
               ),
             ),
             SizedBox(

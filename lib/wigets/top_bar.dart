@@ -1,4 +1,5 @@
 import 'package:bonless61/screens/notifications_screen.dart';
+import 'package:bonless61/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/src/extension_navigation.dart';
@@ -67,10 +68,13 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ],
             ),
-            const CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.white24,
-              child: Icon(Icons.person, color: Colors.white),
+            GestureDetector(
+              onTap: () => Get.to(ProfileScreen()),
+              child: const CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.white24,
+                child: Icon(Icons.person, color: Colors.white),
+              ),
             ),
           ],
         ),

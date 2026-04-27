@@ -1,6 +1,8 @@
 import 'package:bonless61/core/theme/app_colors.dart';
+import 'package:bonless61/screens/cart_screen.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 class Homescreen extends StatelessWidget {
   const Homescreen({super.key});
@@ -10,24 +12,27 @@ class Homescreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: const TopBar(),
-      floatingActionButton: Container(
-        width: 72,
-        height: 72,
-        decoration: BoxDecoration(
-          color: AppColors.primaryRed,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryRed.withOpacity(0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.shopping_basket_outlined,
-          color: Colors.white,
-          size: 34,
+      floatingActionButton: GestureDetector(
+        onTap: () => Get.to(() => const CartScreen()),
+        child: Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.primaryRed,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryRed.withOpacity(0.35),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.shopping_basket_outlined,
+            color: Colors.white,
+            size: 34,
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

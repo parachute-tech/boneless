@@ -5,7 +5,7 @@ import 'package:get/get_utils/src/extensions/internacionalization.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:bonless61/screens/order_screen.dart';
+import 'package:bonless61/screens/Item_info.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
@@ -349,7 +349,7 @@ class _MenuScreenState extends State<MenuScreen> {
                             price: _formatPrice(items.first['price_syp']),
                             calories: _formatCalories(items.first['calories']),
                             onTap: () {
-                              Get.to(() => OrderScreen(item: items.first));                            },
+                              Get.to(() => ItemInfo(item: items.first));                            },
                           ),
                           if (items.length > 1) const SizedBox(height: 16),
                           ...items.skip(1).map(

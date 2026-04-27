@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/screens/order_screen.dart';
+import 'package:bonless61/screens/Item_info.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/src/extension_navigation.dart';
+import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MenuItemCard extends StatelessWidget {
   final String title;
@@ -20,6 +23,83 @@ class MenuItemCard extends StatelessWidget {
     required this.item,
   });
 
+  Future<void> _quickAddToCart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    final menuItemId = item['id']?.toString();
+
+    if (token == null || token.isEmpty) {
+      Get.snackbar(
+        'Login required',
+        'Please login before adding items to cart.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    if (menuItemId == null || menuItemId.isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Menu item id is missing.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://207.180.254.216/api/cart/items'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'menu_item_id': menuItemId,
+          'quantity': 1,
+          'kitchen_note': null,
+          'option_ids': <String>[],
+        }),
+      );
+
+      Map<String, dynamic> responseBody = {};
+      if (response.body.isNotEmpty) {
+        responseBody = jsonDecode(response.body) as Map<String, dynamic>;
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        Get.snackbar(
+          'Added to cart',
+          '$title added to your cart.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.primaryRed,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      Get.snackbar(
+        'Error',
+        responseBody['message']?.toString() ?? 'Could not add item to cart.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } catch (_) {
+      Get.snackbar(
+        'Error',
+        'Something went wrong. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -29,7 +109,7 @@ class MenuItemCard extends StatelessWidget {
       ),
       child: GestureDetector(
         onTap: () {
-          Get.to(() => OrderScreen(item: item));
+          Get.to(() => ItemInfo(item: item));
         },
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -94,17 +174,21 @@ class MenuItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                  size: 28,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _quickAddToCart,
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 ),
               ),
             ],

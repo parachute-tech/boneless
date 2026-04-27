@@ -1,67 +1,263 @@
+import 'dart:convert';
+
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-class OrdersScreen extends StatelessWidget {
+class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
   @override
+  State<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends State<OrdersScreen> {
+  bool isLoading = true;
+  List activeOrders = [];
+  List pastOrders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchOrders();
+  }
+
+  Future<void> fetchOrders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      setState(() => isLoading = false);
+      Get.snackbar(
+        'Login required',
+        'Please login to view your orders.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      final activeResponse = await http.get(
+        Uri.parse('http://207.180.254.216/api/orders?status=active'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final pastResponse = await http.get(
+        Uri.parse('http://207.180.254.216/api/orders?status=past'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (activeResponse.statusCode == 200 && pastResponse.statusCode == 200) {
+        final activeBody = jsonDecode(activeResponse.body);
+        final pastBody = jsonDecode(pastResponse.body);
+
+        setState(() {
+          activeOrders = activeBody['data'] ?? [];
+          pastOrders = pastBody['data'] ?? [];
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+        Get.snackbar(
+          'Error',
+          'Failed to load orders.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (_) {
+      setState(() => isLoading = false);
+      Get.snackbar(
+        'Error',
+        'Something went wrong while loading orders.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  String _formatItems(dynamic order) {
+    final items = order['items'] is List ? order['items'] as List : [];
+
+    if (items.isEmpty) return 'No items';
+
+    return items.map((item) {
+      final quantity = item['quantity'] ?? 1;
+      final name = item['name'] ?? 'Item';
+      return '${quantity}x $name';
+    }).join(' · ');
+  }
+
+  int _statusStep(String status) {
+    switch (status.toUpperCase()) {
+      case 'CONFIRMED':
+        return 0;
+      case 'PREPARING':
+        return 1;
+      case 'OUT_FOR_DELIVERY':
+        return 2;
+      case 'DELIVERED':
+        return 3;
+      default:
+        return 0;
+    }
+  }
+
+  String _displayStatus(String status) {
+    return status.replaceAll('_', ' ');
+  }
+
+  String _displayDate(dynamic order) {
+    final value = order['placed_at'] ?? order['created_at'];
+    if (value == null) return '';
+
+    final parsed = DateTime.tryParse(value.toString());
+    if (parsed == null) return value.toString();
+
+    const months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+
+    return '${parsed.day.toString().padLeft(2, '0')} ${months[parsed.month - 1]} ${parsed.year}';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      appBar: TopBar(),
+    return Scaffold(
+      appBar: const TopBar(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                const TrackOrderCard(
-                  orderId: '#B61-2048',
-                  date: '12 NOV 2025',
-                  itemsText: '2x Boneless · 1x Fries · 1x Drink',
-                  status: 'ON THE WAY',
-                  currentStep: 2,
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text(
-                      'PAST ORDERS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: fetchOrders,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'TRACK ORDER',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (activeOrders.isEmpty)
+                          const EmptyOrdersCard(
+                            message: 'No active orders right now.',
+                          )
+                        else
+                          ...activeOrders.map((order) {
+                            final status = order['status']?.toString() ?? 'CONFIRMED';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: TrackOrderCard(
+                                orderId: '#${order['order_number'] ?? order['id'] ?? ''}',
+                                date: _displayDate(order),
+                                itemsText: _formatItems(order),
+                                status: _displayStatus(status),
+                                currentStep: _statusStep(status),
+                              ),
+                            );
+                          }),
+                        const SizedBox(height: 28),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text(
+                              'PAST ORDERS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'VIEW ALL',
+                              style: TextStyle(
+                                color: AppColors.primaryRed,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (pastOrders.isEmpty)
+                          const EmptyOrdersCard(
+                            message: 'No past orders yet.',
+                          )
+                        else
+                          ...pastOrders.map((order) {
+                            final status = order['status']?.toString() ?? 'DELIVERED';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: PastOrderCard(
+                                orderId: '#${order['order_number'] ?? order['id'] ?? ''}',
+                                date: _displayDate(order),
+                                itemsText: _formatItems(order),
+                                status: _displayStatus(status),
+                              ),
+                            );
+                          }),
+                      ],
                     ),
-                    Text(
-                      'VIEW ALL',
-                      style: TextStyle(
-                        color: AppColors.primaryRed,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                const PastOrderCard(
-                  orderId: '#B61-2017',
-                  date: '08 NOV 2025',
-                  itemsText: '1x Burger Boneless · 1x Fries',
-                  status: 'DELIVERED',
-                ),
-                const SizedBox(height: 14),
-                const PastOrderCard(
-                  orderId: '#B61-1984',
-                  date: '04 NOV 2025',
-                  itemsText: '1x Classic Bucket · 2x Drinks',
-                  status: 'CANCELED',
-                ),
-              ],
-            ),
-          ),
+              ),
+      ),
+    );
+  }
+}
+
+class EmptyOrdersCard extends StatelessWidget {
+  final String message;
+
+  const EmptyOrdersCard({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 15,
         ),
       ),
     );
@@ -129,9 +325,9 @@ class TrackOrderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              const Text(
                 'TRACK ORDER',
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -178,9 +374,7 @@ class TrackOrderCard extends StatelessWidget {
               return Expanded(
                 child: Container(
                   height: 3,
-                  color: isActive
-                      ? AppColors.primaryRed
-                      : Colors.white12,
+                  color: isActive ? AppColors.primaryRed : Colors.white12,
                 ),
               );
             }
@@ -193,13 +387,9 @@ class TrackOrderCard extends StatelessWidget {
               height: 18,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isActive
-                    ? AppColors.primaryRed
-                    : const Color(0xFF2A2A2A),
+                color: isActive ? AppColors.primaryRed : const Color(0xFF2A2A2A),
                 border: Border.all(
-                  color: isActive
-                      ? AppColors.primaryRed
-                      : Colors.white24,
+                  color: isActive ? AppColors.primaryRed : Colors.white24,
                 ),
               ),
             );
@@ -247,7 +437,7 @@ class PastOrderCard extends StatelessWidget {
     required this.status,
   });
 
-  bool get isCanceled => status.toUpperCase() == 'CANCELED';
+  bool get isCanceled => status.toUpperCase() == 'CANCELLED' || status.toUpperCase() == 'CANCELED';
 
   @override
   Widget build(BuildContext context) {
