@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bonless61/core/theme/app_colors.dart';
+import 'package:bonless61/widgets/loading_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -256,6 +257,10 @@ class _ItemInfoState extends State<ItemInfo> {
         ? currentItem['option_groups'] as List
         : [];
 
+    if (isLoading) {
+      return const LoadingWidget();
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -274,53 +279,51 @@ class _ItemInfoState extends State<ItemInfo> {
         onPressed: addToCart,
       ),
       body: SafeArea(
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ImageSlider(images: images),
-                    const SizedBox(height: 20),
-                    ItemHeader(
-                      name: itemName,
-                      description: description,
-                      price: _basePrice(),
-                      calories: calories,
-                    ),
-                    const SizedBox(height: 20),
-                    QuantitySelector(
-                      quantity: quantity,
-                      onDecrease: () {
-                        if (quantity == 1) return;
-                        setState(() => quantity--);
-                      },
-                      onIncrease: () => setState(() => quantity++),
-                    ),
-                    const SizedBox(height: 20),
-                    if (optionGroups.isNotEmpty) ...[
-                      const SectionTitle(title: 'Additions'),
-                      const SizedBox(height: 12),
-                      ...optionGroups.map((group) {
-                        if (group is! Map<String, dynamic>) {
-                          return const SizedBox.shrink();
-                        }
-
-                        return OptionGroupCard(
-                          group: group,
-                          selectedOptionIds: selectedOptionIds,
-                          onOptionTap: _toggleOption,
-                        );
-                      }),
-                    ],
-                    const SizedBox(height: 8),
-                    const SectionTitle(title: 'Kitchen note'),
-                    const SizedBox(height: 12),
-                    KitchenNoteField(controller: kitchenNoteController),
-                  ],
-                ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ImageSlider(images: images),
+              const SizedBox(height: 20),
+              ItemHeader(
+                name: itemName,
+                description: description,
+                price: _basePrice(),
+                calories: calories,
               ),
+              const SizedBox(height: 20),
+              QuantitySelector(
+                quantity: quantity,
+                onDecrease: () {
+                  if (quantity == 1) return;
+                  setState(() => quantity--);
+                },
+                onIncrease: () => setState(() => quantity++),
+              ),
+              const SizedBox(height: 20),
+              if (optionGroups.isNotEmpty) ...[
+                const SectionTitle(title: 'Additions'),
+                const SizedBox(height: 12),
+                ...optionGroups.map((group) {
+                  if (group is! Map<String, dynamic>) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return OptionGroupCard(
+                    group: group,
+                    selectedOptionIds: selectedOptionIds,
+                    onOptionTap: _toggleOption,
+                  );
+                }),
+              ],
+              const SizedBox(height: 8),
+              const SectionTitle(title: 'Kitchen note'),
+              const SizedBox(height: 12),
+              KitchenNoteField(controller: kitchenNoteController),
+            ],
+          ),
+        ),
       ),
     );
   }

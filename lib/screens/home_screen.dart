@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bonless61/core/config/app_config.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/screens/cart_screen.dart';
-import 'package:bonless61/wigets/widgetexport.dart';
+import 'package:bonless61/widgets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -135,25 +135,7 @@ class Homescreen extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 // Offers List
-                SizedBox(
-                  height: 200,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: const [
-                      OfferCard(
-                        image: 'assets/deal.png',
-                        title: 'FRIED BONELESS CHICKEN',
-                        price: '320 SYP',
-                      ),
-                      SizedBox(width: 12),
-                      OfferCard(
-                        image: 'assets/deal.png',
-                        title: 'FREE SIDE',
-                        price: '',
-                      ),
-                    ],
-                  ),
-                ),
+                const OffersList(), //there is an error her
                 const SizedBox(height: 28),
 
                 Row(
@@ -193,15 +175,17 @@ class Homescreen extends StatelessWidget {
 }
 
 class OfferCard extends StatelessWidget {
-  final String image;
+  final String? imageUrl;
   final String title;
-  final String price;
+  final String description;
+  final String badgeText;
 
   const OfferCard({
     super.key,
-    required this.image,
+    required this.imageUrl,
     required this.title,
-    required this.price,
+    required this.description,
+    required this.badgeText,
   });
 
   @override
@@ -212,24 +196,35 @@ class OfferCard extends StatelessWidget {
         color: const Color(0xFF1E1E1E),
         borderRadius: BorderRadius.circular(16),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Stack(
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-                child: Image.asset(
-                  image,
+              if (imageUrl != null && imageUrl!.isNotEmpty)
+                Image.network(
+                  imageUrl!,
+                  height: 130,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Image.asset(
+                      'assets/deal.png',
+                      height: 130,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    );
+                  },
+                )
+              else
+                Image.asset(
+                  'assets/deal.png',
                   height: 130,
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
-              ),
-
-              if (price.isNotEmpty)
+              if (badgeText.isNotEmpty)
                 Positioned(
                   top: 10,
                   left: 10,
@@ -243,7 +238,7 @@ class OfferCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      price,
+                      badgeText,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -253,15 +248,33 @@ class OfferCard extends StatelessWidget {
                 ),
             ],
           ),
-
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -270,6 +283,174 @@ class OfferCard extends StatelessWidget {
   }
 }
 
+class OffersList extends StatefulWidget {
+  const OffersList({super.key});
+
+  @override
+  State<OffersList> createState() => _OffersListState();
+}
+
+class _OffersListState extends State<OffersList> {
+  late Future<List<Offer>> _offersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _offersFuture = OffersApi.fetchOffers();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220,
+      child: FutureBuilder<List<Offer>>(
+        future: _offersFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryRed,
+                ),
+              ),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _offersFuture = OffersApi.fetchOffers();
+                });
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Center(
+                  child: Text(
+                    'Could not load offers. Tap to retry.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final offers = snapshot.data ?? [];
+
+          if (offers.isEmpty) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Center(
+                child: Text(
+                  'No offers available right now.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: offers.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final offer = offers[index];
+
+              return OfferCard(
+                imageUrl: offer.imageUrl,
+                title: offer.title,
+                description: offer.description,
+                badgeText: offer.badgeText,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class Offer {
+  final String title;
+  final String description;
+  final String type;
+  final int discountValue;
+  final String? imageUrl;
+
+  const Offer({
+    required this.title,
+    required this.description,
+    required this.type,
+    required this.discountValue,
+    required this.imageUrl,
+  });
+
+  String get badgeText {
+    if (type == 'PERCENTAGE') {
+      return '$discountValue% OFF';
+    }
+
+    if (type == 'FIXED') {
+      return '$discountValue SYP OFF';
+    }
+
+    if (type == 'BOGO') {
+      return 'BOGO';
+    }
+
+    return type;
+  }
+
+  factory Offer.fromJson(Map<String, dynamic> json) {
+    return Offer(
+      title: json['title'] as String? ?? 'Offer',
+      description: json['description'] as String? ?? '',
+      type: json['type'] as String? ?? '',
+      discountValue: json['discount_value'] as int? ?? 0,
+      imageUrl: json['image_url'] as String?,
+    );
+  }
+}
+
+class OffersApi {
+  static Future<List<Offer>> fetchOffers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing auth token');
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/offers'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load offers: ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final offers = decoded['data'] as List<dynamic>? ?? [];
+
+    return offers
+        .map((offer) => Offer.fromJson(offer as Map<String, dynamic>))
+        .toList();
+  }
+}
 
 class LoyaltyCard extends StatefulWidget {
   const LoyaltyCard({super.key});

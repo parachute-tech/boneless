@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bonless61/core/theme/app_colors.dart';
+import 'package:bonless61/widgets/loading_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -355,7 +356,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingWidget()
           : addresses.isEmpty
               ? const Center(
                   child: Text(

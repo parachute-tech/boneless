@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bonless61/core/theme/app_colors.dart';
+import 'package:bonless61/widgets/loading_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:bonless61/screens/checkout_page.dart';
 import 'package:get/get.dart';
@@ -173,7 +174,7 @@ class _CartScreenState extends State<CartScreen> {
         title: const Text('Cart'),
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingWidget()
           : items.isEmpty
               ? const Center(
                   child: Text(

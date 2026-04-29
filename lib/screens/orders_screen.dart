@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/wigets/widgetexport.dart';
+import 'package:bonless61/widgets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;

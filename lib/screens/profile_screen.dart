@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:bonless61/screens/addresses_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/wigets/top_bar.dart';
+import 'package:bonless61/widgets/top_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:bonless61/auth/login.dart';
 import 'package:get/get.dart';

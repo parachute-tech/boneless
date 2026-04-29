@@ -4,7 +4,7 @@ import 'package:bonless61/core/config/app_config.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/wigets/widgetexport.dart';
+import 'package:bonless61/widgets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:date_time_picker/date_time_picker.dart';
 import 'package:bonless61/auth/otp.dart';

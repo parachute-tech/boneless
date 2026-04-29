@@ -6,7 +6,7 @@ import 'package:bonless61/auth/signup.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/wigets/widgetexport.dart';
+import 'package:bonless61/widgets/widgetexport.dart';
 import 'package:bonless61/screens/navigator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:country_picker/country_picker.dart';

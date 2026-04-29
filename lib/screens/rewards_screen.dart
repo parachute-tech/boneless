@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:bonless61/core/config/app_config.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/wigets/widgetexport.dart';
+import 'package:bonless61/widgets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,11 +17,13 @@ class RewardsScreen extends StatefulWidget {
 class _RewardsScreenState extends State<RewardsScreen> {
   int selectedTab = 0;
   late Future<LoyaltySummary> _loyaltySummaryFuture;
+  late Future<List<LoyaltyReward>> _loyaltyRewardsFuture;
 
   @override
   void initState() {
     super.initState();
     _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+    _loyaltyRewardsFuture = LoyaltyApi.fetchRewards();
   }
 
   @override
@@ -52,6 +54,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                           ? () {
                               setState(() {
                                 _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+                                _loyaltyRewardsFuture = LoyaltyApi.fetchRewards();
                               });
                             }
                           : null,
@@ -112,7 +115,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 ),
                 const SizedBox(height: 20),
                 selectedTab == 0
-                    ? const _RedeemContent()
+                    ? _RedeemContent(
+                        rewardsFuture: _loyaltyRewardsFuture,
+                        onRetry: () {
+                          setState(() {
+                            _loyaltyRewardsFuture = LoyaltyApi.fetchRewards();
+                          });
+                        },
+                      )
                     : const _HowToEarnContent(),
                 const SizedBox(height: 28),
               ],
@@ -502,7 +512,13 @@ class RewardsToggleBar extends StatelessWidget {
 }
 
 class _RedeemContent extends StatelessWidget {
-  const _RedeemContent();
+  final Future<List<LoyaltyReward>> rewardsFuture;
+  final VoidCallback onRetry;
+
+  const _RedeemContent({
+    required this.rewardsFuture,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -532,18 +548,42 @@ class _RedeemContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        const RewardItemCard(
-          image: 'assets/deal.png',
-          title: 'LOADED FRIES',
-          subtitle: 'French fries - cheddar cheese -\nchips - boneless sauce.',
-          points: '10 PTS',
-        ),
-        const SizedBox(height: 14),
-        const RewardItemCard(
-          image: 'assets/deal.png',
-          title: 'CLASSIC SLIDER',
-          subtitle: 'Angus beef with aged cheddar.',
-          points: '15 PTS',
+        FutureBuilder<List<LoyaltyReward>>(
+          future: rewardsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const RewardsLoadingCard();
+            }
+
+            if (snapshot.hasError) {
+              return RewardsErrorCard(onRetry: onRetry);
+            }
+
+            final rewards = snapshot.data ?? [];
+
+            if (rewards.isEmpty) {
+              return const RewardsEmptyCard();
+            }
+
+            return Column(
+              children: rewards
+                  .map(
+                    (reward) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: RewardItemCard(
+                        imageUrl: reward.imageUrl,
+                        title: reward.name,
+                        subtitle: reward.canRedeem
+                            ? 'Ready to redeem now.'
+                            : 'Not enough points yet, but this reward is still available.',
+                        points: '${reward.pointsCost} PTS',
+                        canRedeem: reward.canRedeem,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            );
+          },
         ),
       ],
     );
@@ -551,17 +591,19 @@ class _RedeemContent extends StatelessWidget {
 }
 
 class RewardItemCard extends StatelessWidget {
-  final String image;
+  final String? imageUrl;
   final String title;
   final String subtitle;
   final String points;
+  final bool canRedeem;
 
   const RewardItemCard({
     super.key,
-    required this.image,
+    required this.imageUrl,
     required this.title,
     required this.subtitle,
     required this.points,
+    required this.canRedeem,
   });
 
   @override
@@ -577,12 +619,28 @@ class RewardItemCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              Image.asset(
-                image,
-                width: double.infinity,
-                height: 120,
-                fit: BoxFit.cover,
-              ),
+              if (imageUrl != null && imageUrl!.isNotEmpty)
+                Image.network(
+                  imageUrl!,
+                  width: double.infinity,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Image.asset(
+                      'assets/deal.png',
+                      width: double.infinity,
+                      height: 120,
+                      fit: BoxFit.cover,
+                    );
+                  },
+                )
+              else
+                Image.asset(
+                  'assets/deal.png',
+                  width: double.infinity,
+                  height: 120,
+                  fit: BoxFit.cover,
+                ),
               Positioned(
                 top: 10,
                 right: 10,
@@ -632,7 +690,7 @@ class RewardItemCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        title.toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -655,13 +713,13 @@ class RewardItemCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: canRedeem ? Colors.white : Colors.white12,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text(
-                    'CLAIM',
+                  child: Text(
+                    canRedeem ? 'CLAIM' : 'NEED MORE',
                     style: TextStyle(
-                      color: Colors.black,
+                      color: canRedeem ? Colors.black : Colors.white38,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -672,6 +730,101 @@ class RewardItemCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class RewardsLoadingCard extends StatelessWidget {
+  const RewardsLoadingCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Text(
+        'Loading rewards...',
+        style: TextStyle(color: Colors.white70),
+      ),
+    );
+  }
+}
+
+class RewardsErrorCard extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const RewardsErrorCard({
+    super.key,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onRetry,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const Text(
+          'Could not load rewards. Tap to retry.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      ),
+    );
+  }
+}
+
+class RewardsEmptyCard extends StatelessWidget {
+  const RewardsEmptyCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Text(
+        'No rewards available right now.',
+        style: TextStyle(color: Colors.white70),
+      ),
+    );
+  }
+}
+class LoyaltyReward {
+  final String id;
+  final String name;
+  final String? imageUrl;
+  final int pointsCost;
+  final bool canRedeem;
+
+  const LoyaltyReward({
+    required this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.pointsCost,
+    required this.canRedeem,
+  });
+
+  factory LoyaltyReward.fromJson(Map<String, dynamic> json) {
+    final menuItem = json['menu_item'] as Map<String, dynamic>?;
+
+    return LoyaltyReward(
+      id: json['id'] as String? ?? '',
+      name: menuItem?['name'] as String? ?? 'Reward',
+      imageUrl: menuItem?['image_url'] as String?,
+      pointsCost: json['points_cost'] as int? ?? 0,
+      canRedeem: json['can_redeem'] as bool? ?? false,
     );
   }
 }
@@ -860,5 +1013,33 @@ class LoyaltyApi {
     return LoyaltySummary.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  static Future<List<LoyaltyReward>> fetchRewards() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing auth token');
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/loyalty/rewards'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load loyalty rewards: ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final rewards = decoded['data'] as List<dynamic>? ?? [];
+
+    return rewards
+        .map((reward) => LoyaltyReward.fromJson(reward as Map<String, dynamic>))
+        .toList();
   }
 }
