@@ -1,6 +1,11 @@
+import 'dart:convert';
+
+import 'package:bonless61/core/config/app_config.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key});
@@ -11,6 +16,13 @@ class RewardsScreen extends StatefulWidget {
 
 class _RewardsScreenState extends State<RewardsScreen> {
   int selectedTab = 0;
+  late Future<LoyaltySummary> _loyaltySummaryFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,147 +36,71 @@ class _RewardsScreenState extends State<RewardsScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 0),
-                SizedBox(
-                  height: 500,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // subtle outer glow behind everything
-                      Transform.translate(
-                        offset: const Offset(0, -22),
-                        child: Container(
-                          width: 390,
-                          height: 390,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                AppColors.primaryRed.withOpacity(0.08),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 1.0],
-                            ),
-                          ),
-                        ),
-                      ),
+                FutureBuilder<LoyaltySummary>(
+                  future: _loyaltySummaryFuture,
+                  builder: (context, snapshot) {
+                    final summary = snapshot.data;
+                    final isLoading = snapshot.connectionState == ConnectionState.waiting;
+                    final hasError = snapshot.hasError || !snapshot.hasData;
 
-                      // dark square behind content
-                      Transform.translate(
-                        offset: const Offset(0, -18),
-                        child: Container(
-                          width: 300,
-                          height: 300,
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.12),
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // inner red glow
-                      Transform.translate(
-                        offset: const Offset(0, -18),
-                        child: Container(
-                          width: 255,
-                          height: 255,
-                          decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              colors: [
-                                AppColors.primaryRed.withOpacity(0.16),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 1.0],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // red angular frame
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: _RewardsFramePainter(AppColors.primaryRed),
-                        ),
-                      ),
-
-                      // centered card content
-                      const Positioned(
-                        top: 130,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'CURRENT BALANCE',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                                letterSpacing: 3.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 18),
-                            Text(
-                              '25',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 86,
-                                fontWeight: FontWeight.bold,
-                                height: 1,
-                              ),
-                            ),
-                            SizedBox(height: 10),
-                            Text(
-                              'POINTS',
-                              style: TextStyle(
-                                color: AppColors.primaryRed,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.8,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    return RewardsBalanceHeader(
+                      points: isLoading || hasError
+                          ? '--'
+                          : summary!.totalPoints.toString(),
+                      label: hasError ? 'COULD NOT LOAD POINTS' : 'CURRENT BALANCE',
+                      onRetry: hasError
+                          ? () {
+                              setState(() {
+                                _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+                              });
+                            }
+                          : null,
+                    );
+                  },
                 ),
                 const SizedBox(height: 0),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: RichText(
-                    textAlign: TextAlign.center,
-                    text: const TextSpan(
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                      children: [
-                        TextSpan(text: "You're "),
-                        TextSpan(
-                          text: '25 pts',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        TextSpan(text: ' away from a '),
-                        TextSpan(
-                          text: 'Free Loaded Fries!',
-                          style: TextStyle(
-                            color: AppColors.primaryRed,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                FutureBuilder<LoyaltySummary>(
+                  future: _loyaltySummaryFuture,
+                  builder: (context, snapshot) {
+                    final summary = snapshot.data;
+                    final isLoading = snapshot.connectionState == ConnectionState.waiting;
+                    final hasError = snapshot.hasError || !snapshot.hasData;
+
+                    if (isLoading) {
+                      return const RewardsProgressText(
+                        pointsText: 'Loading',
+                        targetText: 'your next tier',
+                      );
+                    }
+
+                    if (hasError) {
+                      return const RewardsProgressText(
+                        pointsText: '--',
+                        targetText: 'your rewards',
+                      );
+                    }
+
+                    return RewardsProgressText(
+                      pointsText: '${summary!.pointsRemaining ?? 0} pts',
+                      targetText: summary.nextTierName == null
+                          ? 'Max Tier!'
+                          : '${summary.nextTierName} Tier!',
+                    );
+                  },
                 ),
                 const SizedBox(height: 28),
-                const TierProgressCard(),
+                FutureBuilder<LoyaltySummary>(
+                  future: _loyaltySummaryFuture,
+                  builder: (context, snapshot) {
+                    final summary = snapshot.data;
+                    return TierProgressCard(
+                      currentTierName: summary?.currentTierName ?? 'LOADING',
+                      nextTierName: summary?.nextTierName,
+                      pointsRemaining: summary?.pointsRemaining,
+                      progress: summary?.progress ?? 0,
+                    );
+                  },
+                ),
                 const SizedBox(height: 20),
                 RewardsToggleBar(
                   selectedIndex: selectedTab,
@@ -217,10 +153,25 @@ class _RewardsFramePainter extends CustomPainter {
 
 
 class TierProgressCard extends StatelessWidget {
-  const TierProgressCard({super.key});
+  final String currentTierName;
+  final String? nextTierName;
+  final int? pointsRemaining;
+  final double progress;
+
+  const TierProgressCard({
+    super.key,
+    required this.currentTierName,
+    required this.nextTierName,
+    required this.pointsRemaining,
+    required this.progress,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final nextTierLabel = nextTierName == null
+        ? 'TOP TIER'
+        : '${pointsRemaining ?? 0} PTS TO ${nextTierName!.toUpperCase()}';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
@@ -250,19 +201,19 @@ class TierProgressCard extends StatelessWidget {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'SILVER TIER',
-                            style: TextStyle(
+                            '${currentTierName.toUpperCase()} TIER',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 6),
+                          const SizedBox(height: 6),
                           Text(
-                            '200 PTS TO GOLD',
-                            style: TextStyle(
+                            nextTierLabel,
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 11,
                               letterSpacing: 2,
@@ -288,67 +239,184 @@ class TierProgressCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 22),
-                Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'BRONZE',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        flex: 4,
-                        child: Center(
-                          child: Text(
-                            'SILVER',
-                            style: TextStyle(
-                              color: Colors.white38,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const Expanded(
-                        flex: 3,
-                        child: Center(
-                          child: Text(
-                            'GOLD',
-                            style: TextStyle(
-                              color: Colors.white38,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LinearProgressIndicator(
+                    value: progress.clamp(0, 1),
+                    minHeight: 36,
+                    backgroundColor: Colors.black,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.primaryRed,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+class RewardsBalanceHeader extends StatelessWidget {
+  final String points;
+  final String label;
+  final VoidCallback? onRetry;
+
+  const RewardsBalanceHeader({
+    super.key,
+    required this.points,
+    required this.label,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 500,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.translate(
+            offset: const Offset(0, -22),
+            child: Container(
+              width: 390,
+              height: 390,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primaryRed.withOpacity(0.08),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
+          ),
+          Transform.translate(
+            offset: const Offset(0, -18),
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.12),
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+          Transform.translate(
+            offset: const Offset(0, -18),
+            child: Container(
+              width: 255,
+              height: 255,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primaryRed.withOpacity(0.16),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _RewardsFramePainter(AppColors.primaryRed),
+            ),
+          ),
+          Positioned(
+            top: 130,
+            child: GestureDetector(
+              onTap: onRetry,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      letterSpacing: 3.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    points,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 86,
+                      fontWeight: FontWeight.bold,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'POINTS',
+                    style: TextStyle(
+                      color: AppColors.primaryRed,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RewardsProgressText extends StatelessWidget {
+  final String pointsText;
+  final String targetText;
+
+  const RewardsProgressText({
+    super.key,
+    required this.pointsText,
+    required this.targetText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: RichText(
+        textAlign: TextAlign.center,
+        text: TextSpan(
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            height: 1.5,
+          ),
+          children: [
+            const TextSpan(text: "You're "),
+            TextSpan(
+              text: pointsText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const TextSpan(text: ' away from '),
+            TextSpan(
+              text: targetText,
+              style: const TextStyle(
+                color: AppColors.primaryRed,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -727,6 +795,70 @@ class EarnItemCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+class LoyaltySummary {
+  final int totalPoints;
+  final String currentTierName;
+  final String? nextTierName;
+  final int? nextTierMinPoints;
+  final int? pointsRemaining;
+
+  const LoyaltySummary({
+    required this.totalPoints,
+    required this.currentTierName,
+    required this.nextTierName,
+    required this.nextTierMinPoints,
+    required this.pointsRemaining,
+  });
+
+  double get progress {
+    if (nextTierMinPoints == null || nextTierMinPoints == 0) {
+      return 1;
+    }
+
+    return totalPoints / nextTierMinPoints!;
+  }
+
+  factory LoyaltySummary.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>;
+    final currentTier = data['current_tier'] as Map<String, dynamic>?;
+    final nextTier = data['next_tier'] as Map<String, dynamic>?;
+
+    return LoyaltySummary(
+      totalPoints: data['total_points'] as int? ?? 0,
+      currentTierName: currentTier?['name'] as String? ?? 'N/A',
+      nextTierName: nextTier?['name'] as String?,
+      nextTierMinPoints: nextTier?['min_points'] as int?,
+      pointsRemaining: nextTier?['points_remaining'] as int?,
+    );
+  }
+}
+
+class LoyaltyApi {
+  static Future<LoyaltySummary> fetchSummary() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing auth token');
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/loyalty/summary'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load loyalty summary: ${response.statusCode}');
+    }
+
+    return LoyaltySummary.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
 }

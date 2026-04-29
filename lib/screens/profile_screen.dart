@@ -19,6 +19,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Map<String, dynamic>> _profileFuture;
+  late Future<LoyaltySummary> _loyaltySummaryFuture;
   final fullNameController = TextEditingController();
   final emailController = TextEditingController();
   String selectedLanguage = 'en';
@@ -28,6 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _profileFuture = _fetchProfile();
+    _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
   }
 
   @override
@@ -71,6 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _retry() async {
     setState(() {
       _profileFuture = _fetchProfile();
+      _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
     });
   }
 
@@ -372,10 +375,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onEdit: () => _showEditProfileDialog(profile),
                     ),
                     const SizedBox(height: 20),
-                    const PointsCard(
-                      points: 25,
-                      progress: 0.62,
-                      remainingText: '15 PTS UNTIL FREE LOADED FRIES',
+                    FutureBuilder<LoyaltySummary>(
+                      future: _loyaltySummaryFuture,
+                      builder: (context, loyaltySnapshot) {
+                        final summary = loyaltySnapshot.data;
+                        final isLoading = loyaltySnapshot.connectionState == ConnectionState.waiting;
+                        final hasError = loyaltySnapshot.hasError || !loyaltySnapshot.hasData;
+
+                        if (isLoading) {
+                          return const PointsCard(
+                            pointsText: '--',
+                            progress: 0,
+                            remainingText: 'LOADING REWARDS',
+                          );
+                        }
+
+                        if (hasError) {
+                          return PointsCard(
+                            pointsText: '--',
+                            progress: 0,
+                            remainingText: 'COULD NOT LOAD POINTS',
+                            onRetry: () {
+                              setState(() {
+                                _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+                              });
+                            },
+                          );
+                        }
+
+                        return PointsCard(
+                          pointsText: summary!.totalPoints.toString(),
+                          progress: summary.progress,
+                          remainingText: summary.nextTierName == null
+                              ? 'TOP TIER REACHED'
+                              : '${summary.pointsRemaining ?? 0} PTS TO ${summary.nextTierName!.toUpperCase()}',
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
                     const ProfileActionsGrid(),
@@ -520,138 +555,143 @@ class ProfileCard extends StatelessWidget {
 }
 
 class PointsCard extends StatelessWidget {
-  final int points;
-  final double progress; // 0 -> 1
+  final String pointsText;
+  final double progress;
   final String remainingText;
+  final VoidCallback? onRetry;
 
   const PointsCard({
     super.key,
-    required this.points,
+    required this.pointsText,
     required this.progress,
     required this.remainingText,
+    this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'TOTAL REWARDS',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 12,
-                  letterSpacing: 2,
+    return GestureDetector(
+      onTap: onRetry,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text(
+                  'TOTAL REWARDS',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                  ),
                 ),
-              ),
-              Icon(Icons.confirmation_number, color: AppColors.primaryRed),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$points',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'POINTS',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 16,
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            remainingText,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-              letterSpacing: 1,
+                Icon(Icons.confirmation_number, color: AppColors.primaryRed),
+              ],
             ),
-          ),
-          const SizedBox(height: 14),
-          Stack(
-            children: [
-              Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  color: Colors.white12,
-                  borderRadius: BorderRadius.circular(10),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  pointsText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                const SizedBox(width: 10),
+                const Text(
+                  'POINTS',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 16,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              remainingText,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                letterSpacing: 1,
               ),
-              FractionallySizedBox(
-                widthFactor: progress,
-                child: Container(
+            ),
+            const SizedBox(height: 14),
+            Stack(
+              children: [
+                Container(
                   height: 8,
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
+                    color: Colors.white12,
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'REDEEM',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                FractionallySizedBox(
+                  widthFactor: progress.clamp(0, 1),
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Color(0xFF2A2A2A),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'HOW TO EARN',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontWeight: FontWeight.bold,
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'REDEEM',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF2A2A2A),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'HOW TO EARN',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -805,6 +845,70 @@ class LogoutButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class LoyaltySummary {
+  final int totalPoints;
+  final String currentTierName;
+  final String? nextTierName;
+  final int? nextTierMinPoints;
+  final int? pointsRemaining;
+
+  const LoyaltySummary({
+    required this.totalPoints,
+    required this.currentTierName,
+    required this.nextTierName,
+    required this.nextTierMinPoints,
+    required this.pointsRemaining,
+  });
+
+  double get progress {
+    if (nextTierMinPoints == null || nextTierMinPoints == 0) {
+      return 1;
+    }
+    return totalPoints / nextTierMinPoints!;
+  }
+
+  factory LoyaltySummary.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>;
+    final currentTier = data['current_tier'] as Map<String, dynamic>?;
+    final nextTier = data['next_tier'] as Map<String, dynamic>?;
+
+    return LoyaltySummary(
+      totalPoints: data['total_points'] as int? ?? 0,
+      currentTierName: currentTier?['name'] as String? ?? 'N/A',
+      nextTierName: nextTier?['name'] as String?,
+      nextTierMinPoints: nextTier?['min_points'] as int?,
+      pointsRemaining: nextTier?['points_remaining'] as int?,
+    );
+  }
+}
+
+class LoyaltyApi {
+  static Future<LoyaltySummary> fetchSummary() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing auth token');
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/loyalty/summary'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load loyalty summary: ${response.statusCode}');
+    }
+
+    return LoyaltySummary.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
 }

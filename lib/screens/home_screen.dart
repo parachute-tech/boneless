@@ -1,3 +1,8 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bonless61/core/config/app_config.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:bonless61/screens/cart_screen.dart';
 import 'package:bonless61/wigets/widgetexport.dart';
@@ -265,8 +270,88 @@ class OfferCard extends StatelessWidget {
   }
 }
 
-class LoyaltyCard extends StatelessWidget {
+
+class LoyaltyCard extends StatefulWidget {
   const LoyaltyCard({super.key});
+
+  @override
+  State<LoyaltyCard> createState() => _LoyaltyCardState();
+}
+
+class _LoyaltyCardState extends State<LoyaltyCard> {
+  late Future<LoyaltySummary> _loyaltySummaryFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<LoyaltySummary>(
+      future: _loyaltySummaryFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoyaltyCardView(
+            points: '--',
+            tierName: 'LOADING',
+            nextReward: 'LOADING REWARD',
+            progress: 0,
+            pointsLeftText: '',
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData) {
+          return LoyaltyCardView(
+            points: '--',
+            tierName: 'ERROR',
+            nextReward: 'COULD NOT LOAD POINTS',
+            progress: 0,
+            pointsLeftText: 'Tap refresh later',
+            onRetry: () {
+              setState(() {
+                _loyaltySummaryFuture = LoyaltyApi.fetchSummary();
+              });
+            },
+          );
+        }
+
+        final summary = snapshot.data!;
+
+        return LoyaltyCardView(
+          points: summary.totalPoints.toString(),
+          tierName: summary.currentTierName,
+          nextReward: summary.nextTierName == null
+              ? 'MAX TIER REACHED'
+              : 'NEXT TIER: ${summary.nextTierName}',
+          progress: summary.progress,
+          pointsLeftText: summary.pointsRemaining == null
+              ? 'Top tier'
+              : '${summary.pointsRemaining} pts left',
+        );
+      },
+    );
+  }
+}
+
+class LoyaltyCardView extends StatelessWidget {
+  final String points;
+  final String tierName;
+  final String nextReward;
+  final double progress;
+  final String pointsLeftText;
+  final VoidCallback? onRetry;
+
+  const LoyaltyCardView({
+    super.key,
+    required this.points,
+    required this.tierName,
+    required this.nextReward,
+    required this.progress,
+    required this.pointsLeftText,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -290,21 +375,28 @@ class LoyaltyCard extends StatelessWidget {
                   letterSpacing: 1.5,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.card_giftcard, color: AppColors.primaryRed, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      'TIER 2',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ],
+              GestureDetector(
+                onTap: onRetry,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.card_giftcard,
+                        color: AppColors.primaryRed,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'TIER $tierName',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -312,37 +404,13 @@ class LoyaltyCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: const [
-              Text(
-                '25',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 40,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(width: 8),
-              Padding(
-                padding: EdgeInsets.only(bottom: 6),
-                child: Text(
-                  'PTS',
-                  style: TextStyle(
-                    color: AppColors.primaryRed,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          PointsDisplay(points: points),
 
           const SizedBox(height: 12),
 
-          const Text(
-            'NEXT REWARD: FREE BUCKET',
-            style: TextStyle(
+          Text(
+            nextReward,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -351,7 +419,6 @@ class LoyaltyCard extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // Progress bar
           Stack(
             children: [
               Container(
@@ -362,7 +429,7 @@ class LoyaltyCard extends StatelessWidget {
                 ),
               ),
               FractionallySizedBox(
-                widthFactor: 0.6,
+                widthFactor: progress.clamp(0, 1),
                 child: Container(
                   height: 10,
                   decoration: BoxDecoration(
@@ -376,15 +443,118 @@ class LoyaltyCard extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          const Align(
+          Align(
             alignment: Alignment.centerRight,
             child: Text(
-              '250 pts left',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              pointsLeftText,
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class LoyaltySummary {
+  final int totalPoints;
+  final String currentTierName;
+  final String? nextTierName;
+  final int? nextTierMinPoints;
+  final int? pointsRemaining;
+
+  const LoyaltySummary({
+    required this.totalPoints,
+    required this.currentTierName,
+    required this.nextTierName,
+    required this.nextTierMinPoints,
+    required this.pointsRemaining,
+  });
+
+  double get progress {
+    if (nextTierMinPoints == null || nextTierMinPoints == 0) {
+      return 1;
+    }
+
+    return totalPoints / nextTierMinPoints!;
+  }
+
+  factory LoyaltySummary.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>;
+    final currentTier = data['current_tier'] as Map<String, dynamic>?;
+    final nextTier = data['next_tier'] as Map<String, dynamic>?;
+
+    return LoyaltySummary(
+      totalPoints: data['total_points'] as int? ?? 0,
+      currentTierName: currentTier?['name'] as String? ?? 'N/A',
+      nextTierName: nextTier?['name'] as String?,
+      nextTierMinPoints: nextTier?['min_points'] as int?,
+      pointsRemaining: nextTier?['points_remaining'] as int?,
+    );
+  }
+}
+
+class LoyaltyApi {
+  static Future<LoyaltySummary> fetchSummary() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing auth token');
+    }
+
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/loyalty/summary'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load loyalty summary: ${response.statusCode}');
+    }
+
+    return LoyaltySummary.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+}
+
+class PointsDisplay extends StatelessWidget {
+  final String points;
+
+  const PointsDisplay({
+    super.key,
+    required this.points,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          points,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 40,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 6),
+          child: Text(
+            'PTS',
+            style: TextStyle(
+              color: AppColors.primaryRed,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
