@@ -32,7 +32,9 @@ class _CartScreenState extends State<CartScreen> {
     final token = prefs.getString('token');
 
     if (token == null || token.isEmpty) {
+      if (!mounted) return;
       setState(() => isLoading = false);
+
       Get.snackbar(
         'Login required',
         'Please login to view your cart.',
@@ -58,6 +60,7 @@ class _CartScreenState extends State<CartScreen> {
         final data = body['data'] ?? {};
         final cartItems = data['items'] ?? [];
 
+        if (!mounted) return;
         setState(() {
           cart = Map<String, dynamic>.from(data);
           items = cartItems;
@@ -66,7 +69,9 @@ class _CartScreenState extends State<CartScreen> {
 
         await fetchCartItemImages(cartItems, token);
       } else {
+        if (!mounted) return;
         setState(() => isLoading = false);
+
         Get.snackbar(
           'Error',
           body['message']?.toString() ?? 'Failed to load cart.',
@@ -76,7 +81,9 @@ class _CartScreenState extends State<CartScreen> {
         );
       }
     } catch (_) {
+      if (!mounted) return;
       setState(() => isLoading = false);
+
       Get.snackbar(
         'Error',
         'Something went wrong while loading cart.',
@@ -89,6 +96,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> fetchCartItemImages(List cartItems, String token) async {
     for (final cartItem in cartItems) {
+      if (!mounted) return;
       if (cartItem is! Map) continue;
 
       final menuItemId = cartItem['menu_item_id']?.toString();
@@ -108,7 +116,8 @@ class _CartScreenState extends State<CartScreen> {
           final body = jsonDecode(response.body);
           final imageUrl = body['data']?['image_url']?.toString() ?? '';
 
-          if (imageUrl.isNotEmpty && mounted) {
+          if (!mounted) return;
+          if (imageUrl.isNotEmpty) {
             setState(() {
               itemImages[menuItemId] = imageUrl;
             });
@@ -133,6 +142,8 @@ class _CartScreenState extends State<CartScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         await fetchCart();
+
+        if (!mounted) return;
         Get.snackbar(
           'Removed',
           'Item removed from cart.',
@@ -142,6 +153,8 @@ class _CartScreenState extends State<CartScreen> {
         );
       } else {
         final body = jsonDecode(response.body);
+
+        if (!mounted) return;
         Get.snackbar(
           'Error',
           body['message']?.toString() ?? 'Could not remove item.',
@@ -151,6 +164,7 @@ class _CartScreenState extends State<CartScreen> {
         );
       }
     } catch (_) {
+      if (!mounted) return;
       Get.snackbar(
         'Error',
         'Something went wrong.',
@@ -197,13 +211,19 @@ class _CartScreenState extends State<CartScreen> {
                       final selectedOptions = item['selected_options'] is List
                           ? item['selected_options'] as List
                           : [];
+
                       final menuItemId = item['menu_item_id']?.toString() ?? '';
                       final menuItem = item['menu_item'];
                       final menuItemCamel = item['menuItem'];
+
                       final imageUrl = item['image_url']?.toString() ??
                           item['image']?.toString() ??
-                          (menuItem is Map ? menuItem['image_url']?.toString() : null) ??
-                          (menuItemCamel is Map ? menuItemCamel['image_url']?.toString() : null) ??
+                          (menuItem is Map
+                              ? menuItem['image_url']?.toString()
+                              : null) ??
+                          (menuItemCamel is Map
+                              ? menuItemCamel['image_url']?.toString()
+                              : null) ??
                           itemImages[menuItemId] ??
                           '';
 
@@ -226,8 +246,9 @@ class _CartScreenState extends State<CartScreen> {
                         confirmDismiss: (_) async {
                           final id = item['id']?.toString();
                           if (id == null) return false;
+
                           await removeCartItem(id);
-                          return true;
+                          return false;
                         },
                         child: Container(
                           padding: const EdgeInsets.all(14),
@@ -249,16 +270,8 @@ class _CartScreenState extends State<CartScreen> {
                                             width: 90,
                                             height: 90,
                                             fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => Container(
-                                              width: 90,
-                                              height: 90,
-                                              color: Colors.white10,
-                                              alignment: Alignment.center,
-                                              child: const Icon(
-                                                Icons.fastfood,
-                                                color: Colors.white54,
-                                              ),
-                                            ),
+                                            errorBuilder: (_, __, ___) =>
+                                                _imageFallback(),
                                           )
                                         : imageUrl.isNotEmpty
                                             ? Image.asset(
@@ -267,21 +280,13 @@ class _CartScreenState extends State<CartScreen> {
                                                 height: 90,
                                                 fit: BoxFit.cover,
                                               )
-                                            : Container(
-                                                width: 90,
-                                                height: 90,
-                                                color: Colors.white10,
-                                                alignment: Alignment.center,
-                                                child: const Icon(
-                                                  Icons.fastfood,
-                                                  color: Colors.white54,
-                                                ),
-                                              ),
+                                            : _imageFallback(),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           item['name']?.toString() ?? 'Item',
@@ -337,7 +342,9 @@ class _CartScreenState extends State<CartScreen> {
                                       decoration: BoxDecoration(
                                         color: Colors.black,
                                         borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(color: Colors.white12),
+                                        border: Border.all(
+                                          color: Colors.white12,
+                                        ),
                                       ),
                                       child: Text(
                                         option['name']?.toString() ?? 'Option',
@@ -373,7 +380,9 @@ class _CartScreenState extends State<CartScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
               decoration: const BoxDecoration(
                 color: Colors.black,
-                border: Border(top: BorderSide(color: Colors.white12)),
+                border: Border(
+                  top: BorderSide(color: Colors.white12),
+                ),
               ),
               child: SafeArea(
                 child: Row(
@@ -410,7 +419,11 @@ class _CartScreenState extends State<CartScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        onPressed: () => Get.to(() => const CheckoutPage()),
+                        onPressed: () async {
+                          await Get.to(() => const CheckoutPage());
+                          if (!mounted) return;
+                          await fetchCart();
+                        },
                         child: const Text(
                           'Checkout',
                           style: TextStyle(
@@ -424,6 +437,19 @@ class _CartScreenState extends State<CartScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _imageFallback() {
+    return Container(
+      width: 90,
+      height: 90,
+      color: Colors.white10,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.fastfood,
+        color: Colors.white54,
+      ),
     );
   }
 }

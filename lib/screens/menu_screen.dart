@@ -6,7 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:bonless61/screens/Item_info.dart';
+import 'package:bonless61/screens/cart_screen.dart';
 import 'package:bonless61/widgets/widgetexport.dart';
+import 'package:bonless61/widgets/loading_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:bonless61/core/theme/app_colors.dart';
 import 'package:get/route_manager.dart';
@@ -23,11 +25,81 @@ class _MenuScreenState extends State<MenuScreen> {
   int _selectedCategoryIndex = 0;
   final TextEditingController searchController = TextEditingController();
   String searchQuery = '';
+  bool _hasCartItems = false;
+  bool _wasRouteCurrent = false;
 
   @override
   void initState() {
     super.initState();
     _menuFuture = _fetchMenu();
+    _loadCartStatus();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? false;
+    if (isCurrentRoute && !_wasRouteCurrent) {
+      _wasRouteCurrent = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _refreshMenuAndCart();
+        }
+      });
+    } else if (!isCurrentRoute) {
+      _wasRouteCurrent = false;
+    }
+  }
+
+  Future<void> _loadCartStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _hasCartItems = false;
+      });
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/cart'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        if (!mounted) return;
+        setState(() {
+          _hasCartItems = false;
+        });
+        return;
+      }
+
+      final body = jsonDecode(response.body);
+      final data = body['data'];
+      final cartItems = data is Map ? data['items'] : null;
+      final itemCount = data is Map ? data['item_count'] : null;
+
+      final hasItems = itemCount is num
+          ? itemCount > 0
+          : cartItems is List && cartItems.isNotEmpty;
+
+      if (!mounted) return;
+      setState(() {
+        _hasCartItems = hasItems;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _hasCartItems = false;
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchMenu() async {
@@ -74,6 +146,24 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
+  Future<void> _refreshMenuAndCart() async {
+    if (!mounted) return;
+    setState(() {
+      _menuFuture = _fetchMenu();
+    });
+    await _loadCartStatus();
+  }
+
+  Future<void> _openCart() async {
+    await Get.to(() => const CartScreen());
+    await _refreshMenuAndCart();
+  }
+
+  Future<void> _openItem(Map<String, dynamic> item) async {
+    await Get.to(() => ItemInfo(item: item));
+    await _refreshMenuAndCart();
+  }
+
   String _formatPrice(dynamic value) {
     if (value == null) return '0 SYP';
     return '${value.toString()} SYP';
@@ -102,12 +192,21 @@ class _MenuScreenState extends State<MenuScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const TopBar(),
+      floatingActionButton: _hasCartItems
+          ? FloatingActionButton.extended(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              onPressed: _openCart,
+              icon: const Icon(Icons.shopping_cart),
+              label: const Text('View Cart'),
+            )
+          : null,
       body: SafeArea(
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _menuFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const LoadingWidget();
             }
 
             if (snapshot.hasError) {
@@ -348,19 +447,22 @@ class _MenuScreenState extends State<MenuScreen> {
                             subtitle: items.first['description']?.toString() ?? '',
                             price: _formatPrice(items.first['price_syp']),
                             calories: _formatCalories(items.first['calories']),
-                            onTap: () {
-                              Get.to(() => ItemInfo(item: items.first));                            },
+                            onTap: () => _openItem(items.first),
                           ),
                           if (items.length > 1) const SizedBox(height: 16),
                           ...items.skip(1).map(
                             (item) => Padding(
                               padding: const EdgeInsets.only(bottom: 16),
-                              child: MenuItemCard(
-                                image: item['image_url']?.toString() ?? '',
-                                title: item['name']?.toString() ?? 'ITEM',
-                                subtitle: item['description']?.toString() ?? '',
-                                price: _formatPrice(item['price_syp']),
-                                item: item,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _openItem(item),
+                                child: MenuItemCard(
+                                  image: item['image_url']?.toString() ?? '',
+                                  title: item['name']?.toString() ?? 'ITEM',
+                                  subtitle: item['description']?.toString() ?? '',
+                                  price: _formatPrice(item['price_syp']),
+                                  item: item,
+                                ),
                               ),
                             ),
                           ),

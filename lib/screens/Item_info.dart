@@ -190,6 +190,10 @@ class _ItemInfoState extends State<ItemInfo> {
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          setState(() => isAddingToCart = false);
+        }
+
         Get.snackbar(
           'Added to cart',
           '${currentItem['name'] ?? 'Item'} added to your cart.',
@@ -197,6 +201,10 @@ class _ItemInfoState extends State<ItemInfo> {
           backgroundColor: AppColors.primaryRed,
           colorText: Colors.white,
         );
+
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+        return;
       } else {
         Get.snackbar(
           'Error',
