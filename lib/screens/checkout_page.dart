@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:bonless61/core/theme/app_colors.dart';
-import 'package:bonless61/screens/orders_screen.dart';
+import 'package:bonless61/screens/navigator.dart';
+import 'package:bonless61/widgets/loading_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -220,7 +221,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         );
 
         Future.delayed(const Duration(seconds: 2), () {
-          Get.offAll(() => const OrdersScreen());
+          if (!mounted) return;
+            Get.offAll(() => const AppNavigator(initialIndex: 3)); 
         });
       } else {
         Get.snackbar(
@@ -267,7 +269,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               onPressed: placeOrder,
             ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingWidget()
           : cartItems.isEmpty
               ? const EmptyCheckoutState()
               : RefreshIndicator(

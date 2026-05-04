@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bonless61/core/theme/app_colors.dart';
+import 'package:bonless61/screens/order_details_screen.dart';
 import 'package:bonless61/widgets/widgetexport.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -151,7 +152,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       appBar: const TopBar(),
       body: SafeArea(
         child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? LoadingWidget()
             : RefreshIndicator(
                 onRefresh: fetchOrders,
                 child: SingleChildScrollView(
@@ -180,6 +181,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 14),
                               child: TrackOrderCard(
+                                order: Map<String, dynamic>.from(order),
                                 orderId: '#${order['order_number'] ?? order['id'] ?? ''}',
                                 date: _displayDate(order),
                                 itemsText: _formatItems(order),
@@ -222,6 +224,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 14),
                               child: PastOrderCard(
+                                order: Map<String, dynamic>.from(order),
                                 orderId: '#${order['order_number'] ?? order['id'] ?? ''}',
                                 date: _displayDate(order),
                                 itemsText: _formatItems(order),
@@ -265,6 +268,7 @@ class EmptyOrdersCard extends StatelessWidget {
 }
 
 class TrackOrderCard extends StatelessWidget {
+  final Map<String, dynamic> order;
   final String orderId;
   final String date;
   final String itemsText;
@@ -273,6 +277,7 @@ class TrackOrderCard extends StatelessWidget {
 
   const TrackOrderCard({
     super.key,
+    required this.order,
     required this.orderId,
     required this.date,
     required this.itemsText,
@@ -325,13 +330,23 @@ class TrackOrderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'TRACK ORDER',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
+              GestureDetector(
+                onTap: () => Get.to(() => OrderDetailsScreen(order: order)),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryRed,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'ORDER DETAILS',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
                 ),
               ),
               Container(
@@ -424,6 +439,7 @@ class TrackOrderCard extends StatelessWidget {
 }
 
 class PastOrderCard extends StatelessWidget {
+  final Map<String, dynamic> order;
   final String orderId;
   final String date;
   final String itemsText;
@@ -431,6 +447,7 @@ class PastOrderCard extends StatelessWidget {
 
   const PastOrderCard({
     super.key,
+    required this.order,
     required this.orderId,
     required this.date,
     required this.itemsText,
@@ -482,13 +499,23 @@ class PastOrderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                isCanceled ? 'ORDER CANCELED' : 'VIEW DETAILS',
-                style: TextStyle(
-                  color: isCanceled ? Colors.white38 : AppColors.primaryRed,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
+              GestureDetector(
+                onTap: isCanceled ? null : () => Get.to(() => OrderDetailsScreen(order: order)),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isCanceled ? const Color(0xFF2A2A2A) : AppColors.primaryRed,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    isCanceled ? 'ORDER CANCELED' : 'VIEW DETAILS',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
                 ),
               ),
               Container(

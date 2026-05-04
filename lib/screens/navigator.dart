@@ -7,14 +7,15 @@ import 'package:bonless61/screens/rewards_screen.dart';
 import 'package:flutter/material.dart';
 
 class AppNavigator extends StatefulWidget {
-  const AppNavigator({super.key});
+  final int initialIndex;
+  const AppNavigator({super.key, this.initialIndex = 0});
 
   @override
   State<AppNavigator> createState() => _NavigatorState();
 }
 
 class _NavigatorState extends State<AppNavigator> {
-  int currentIndex = 0;
+  late int currentIndex;
 
   final List<Widget> pages = const [
     Homescreen(),
@@ -23,6 +24,12 @@ class _NavigatorState extends State<AppNavigator> {
     OrdersScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    currentIndex = widget.initialIndex;
+  }
 
   @override
   Widget build(BuildContext context) {
